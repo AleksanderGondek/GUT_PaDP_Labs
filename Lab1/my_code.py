@@ -6,6 +6,7 @@ import datetime
 import sys
 import argparse
 import random
+import math
 
 
 def _parse_args():
@@ -121,19 +122,62 @@ class Worker(multiprocessing.Process):
     def __generate_random_data(length):
         return [random.randint(-2048, 2048) for _ in range(length)]
 
+    # My methods
+    def __get_number_of_generations_needed(self):
+        generations_needed = math.log(self.__n_workers, 2.0)
+        generations_needed = math.floor(generations_needed)
+
+        return int(generations_needed)
+
+    def __can_i_send_message(self, generation):
+        last_index_to_be_able_to_send = int(math.pow(2.0, generation)) - 1
+        return self.__worker_id <= last_index_to_be_able_to_send
+
+    def __get_recipient_index(self, generation):
+        index = self.__worker_id + int(2.0, generation)
+        if index >= self.__n_workers:
+            return -1
+
+        return index
+
+    def __custom_send(self, data, recipient_index):
+        if recipient_index < 0:
+            return
+
+        self._send(recipient_index, data)
+
+    def __handle_root(self, generation):
+        if self.__worker_id != 0:
+            return
+
+        recipient_index = self.__get_recipient_index(generation)
+        self.__custom_send('dupa', recipient_index)
+
+    def __handle_leaves(self, generation):
+        if self.__worker_id == 0:
+            return
+
+        source_id, data = self._receive()
+        print 'Received data from worker {}: {}'.format(source_id, data)
+        # TODO data persistance
+
+        if not self.__can_i_send_message(generation):
+            return
+
+        recipient_index = self.__get_recipient_index(generation)
+        self.__custom_send('dupa', recipient_index)
+
     def run(self):
         print '[WORKER {}] started.'.format(self.__worker_id)
 
         # TODO: implement this method
 
-        if self.__worker_id == 0:
-            data = Worker.__generate_random_data(16)
-            self._send(1, data)
+        generations_needed = self.__get_number_of_generations_needed()
 
-        elif self.__worker_id == 1:
-            source_id, data = self._receive()
-
-            print 'Received data from worker {}: {}'.format(source_id, data)
+        # Barrier may be needed
+        for i in range(0, generations_needed):
+            self.__handle_root(i)
+            self.__handle_leaves(i)
 
         print '[WORKER {}] terminated.'.format(self.__worker_id)
 
@@ -147,4 +191,3 @@ def main():
 
 if __name__ == '__main__':
     sys.exit(main())
-
