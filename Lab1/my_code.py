@@ -105,6 +105,7 @@ class Worker(multiprocessing.Process):
         self.__worker_id = worker_id
         self.__configuration = configuration
         self.__network_endpoint = network_endpoint
+        self.__my_generation = None
 
     @property
     def __n_workers(self):
@@ -129,16 +130,21 @@ class Worker(multiprocessing.Process):
 
         return int(generations_needed)
 
-    def __can_i_send_message(self, generation):
-        last_index_to_be_able_to_send = int(math.pow(2.0, generation)) - 1
-        return self.__worker_id <= last_index_to_be_able_to_send
-
     def __get_recipient_index(self, generation):
-        index = self.__worker_id + int(2.0, generation)
+        index = self.__worker_id + int(math.pow(2.0, generation))
         if index >= self.__n_workers:
             return -1
 
         return index
+
+    def __which_generation_am_i(self, sender_id):
+        # Calculate in which gen we received data
+        difference = math.fabs(self.__worker_id - sender_id)
+        generation = math.log(difference, 2.0)
+        generation = math.floor(generation)  # Just to be sure
+        generation = int(generation)
+
+        return generation + 1
 
     def __custom_send(self, data, recipient_index):
         if recipient_index < 0:
@@ -146,40 +152,38 @@ class Worker(multiprocessing.Process):
 
         self._send(recipient_index, data)
 
-    def __handle_root(self, generation):
+    def __handle_root(self, last_generation_index):
         if self.__worker_id != 0:
             return
 
-        recipient_index = self.__get_recipient_index(generation)
-        self.__custom_send('dupa', recipient_index)
+        self.__my_generation = 0
+        data = Worker.__generate_random_data(16)
+        while self.__my_generation <= last_generation_index:
+            recipient_index = self.__get_recipient_index(self.__my_generation)
+            self.__custom_send(data, recipient_index)
+            self.__my_generation += 1
 
-    def __handle_leaves(self, generation):
+    def __handle_leaves(self, last_generation_index):
         if self.__worker_id == 0:
             return
 
+        # receive is BLOCKING
+        # worker will start doing code embed here WHEN AND ONLY WHEN HE WILL RECEIVE SOMETHING
         source_id, data = self._receive()
-        print 'Received data from worker {}: {}'.format(source_id, data)
-        # TODO data persistance
 
-        if not self.__can_i_send_message(generation):
-            return
+        # print 'Worker {} received data from worker {}: {}'.format(self.__worker_id, source_id, data)
+        print '{} -> {} - Data: {}'.format(source_id, self.__worker_id, data)
 
-        recipient_index = self.__get_recipient_index(generation)
-        self.__custom_send('dupa', recipient_index)
+        self.__my_generation = self.__which_generation_am_i(source_id)
+        while self.__my_generation <= last_generation_index:
+            recipient_index = self.__get_recipient_index(self.__my_generation)
+            self.__custom_send(data, recipient_index)
+            self.__my_generation += 1
 
     def run(self):
-        print '[WORKER {}] started.'.format(self.__worker_id)
-
-        # TODO: implement this method
-
         generations_needed = self.__get_number_of_generations_needed()
-
-        # Barrier may be needed
-        for i in range(0, generations_needed):
-            self.__handle_root(i)
-            self.__handle_leaves(i)
-
-        print '[WORKER {}] terminated.'.format(self.__worker_id)
+        self.__handle_root(generations_needed)
+        self.__handle_leaves(generations_needed)
 
 
 def main():
