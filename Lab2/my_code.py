@@ -209,7 +209,8 @@ class Worker(multiprocessing.Process):
         self.__network_endpoint = network_endpoint
         self.__my_iteration = 0
 
-        my_number = random.randint(0, 2048)
+        my_number = self.__worker_id
+        # my_number = random.randint(0, 2048)
         self.__total = my_number
         self.__prefix = my_number
 
@@ -225,10 +226,6 @@ class Worker(multiprocessing.Process):
 
     def _receive(self, worker_id=Network.any_id):
         return self.__network_endpoint.receive(worker_id)
-
-    @staticmethod
-    def __generate_random_data(length):
-        return [random.randint(-2048, 2048) for _ in range(length)]
 
     def __log(self, message):
         print '[WORKER {}] {}'.format(self.__worker_id, message)
@@ -260,7 +257,8 @@ class Worker(multiprocessing.Process):
 
             target_id = self._get_target_node_index()
             if self.__worker_id < target_id:
-                self.__log('Proc {0} trying to send number {1} to proc {2}'.format(self.__worker_id, self.__total, target_id))
+                # self.__log(
+                # 'Proc {0} trying to send number {1} to proc {2}'.format(self.__worker_id, self.__total, target_id))
                 self._send(target_id, [self.__total])
                 self.__log('Proc {0} send number {1} to proc {2}'.format(self.__worker_id, self.__total, target_id))
             else:
@@ -269,7 +267,8 @@ class Worker(multiprocessing.Process):
             self.__barrier()
 
             if self.__worker_id > target_id:
-                self.__log('Proc {0} trying to send number {1} to proc {2}'.format(self.__worker_id, self.__total, target_id))
+                # self.__log(
+                #    'Proc {0} trying to send number {1} to proc {2}'.format(self.__worker_id, self.__total, target_id))
                 self._send(target_id, [self.__total])
                 self.__log('Proc {0} send number {1} to proc {2}'.format(self.__worker_id, self.__total, target_id))
             else:
@@ -282,6 +281,9 @@ class Worker(multiprocessing.Process):
             self.__my_iteration += 1
             self.__barrier()
 
+            self.__log(
+                'Proc {0} has total of {1} and prefix of {2}'.format(self.__worker_id, self.__total, self.__prefix))
+
         self.__log('Terminated.')
 
 
@@ -290,7 +292,6 @@ def main():
     configuration = _parse_args()
     system = DistributedSystem(configuration)
     system.run()
-
 
 if __name__ == '__main__':
     sys.exit(main())
