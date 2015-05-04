@@ -344,6 +344,7 @@ class Worker(multiprocessing.Process):
     def run(self):
         self.__log('Started.')
 
+        # http://www.cs.rutgers.edu/~venugopa/parallel_summer2012/mpi_bitonic.html#expl
         self.handle_data_creation_and_distribution()
         # Sequential sort
         # No diff without this, i don't even
