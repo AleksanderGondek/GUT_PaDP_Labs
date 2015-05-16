@@ -31,18 +31,6 @@ def _parse_args():
         type=int
     )
     parser.add_argument(
-        'submatrix-size',
-        help='single square sub-matrix size',
-        type=int,
-        default=3
-    )
-    parser.add_argument(
-        'should-count-square',
-        help='should compute square root of matrix A or AxB multiplication',
-        type=bool,
-        default=True
-    )
-    parser.add_argument(
         '--shared-memory-size',
         help='size of the shared memory array [number of ints]',
         type=int,
@@ -65,6 +53,18 @@ def _parse_args():
         help='processing delay [s]',
         type=float,
         default=0.1
+    )
+    parser.add_argument(
+        '--submatrix-size',
+        help='single square sub-matrix size',
+        type=int,
+        default=3
+    )
+    parser.add_argument(
+        '--should-count-square',
+        help='should compute square root of matrix A or AxB multiplication',
+        type=bool,
+        default=True
     )
 
     return argparse.Namespace(**{
@@ -334,16 +334,18 @@ class Worker(multiprocessing.Process):
         carts = [[0 for y in range(int(math.sqrt(number_of_carts)))] for x in range(int(math.sqrt(number_of_carts)))]
 
         counter = 0
-        for x in carts:
-            for y in carts:
-                carts[x,y] = counter
+        for x in range(len(carts)):
+            for y in range(len(carts)):
+                carts[x][y] = counter
                 counter += 1
 
         return carts
 
     def run(self):
         self._log('Started.')
-
+        print(repr(self.matrix.dataA))
+        self.left_circular_shift_row()
+        print(repr(self.matrix.dataA))
         self._log('Terminated.')
 
 
