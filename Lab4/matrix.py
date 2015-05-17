@@ -25,6 +25,7 @@ def _parse_args():
     parser = argparse.ArgumentParser()
 
     # specify command line options
+    # We assume that n_workers is squarable number - i.e: 4,9,16
     parser.add_argument(
         'n_workers',
         help='number of workers in the distributed system',
