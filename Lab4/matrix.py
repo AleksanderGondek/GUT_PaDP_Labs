@@ -206,8 +206,9 @@ class NetworkEndpoint(object):
 
 
 class Matrix(object):
-    def __init__(self, size, is_counting_square):
-        self.dataA = [[random.randint(-2048, 2048) for x in range(size)] for x in range(size)]
+    def __init__(self, size, is_counting_square, id):
+        # self.dataA = [[random.randint(-2048, 2048) for x in range(size)] for x in range(size)]
+        self.dataA = [[id for x in range(size)] for x in range(size)]
         if is_counting_square:
             self.dataB = self.dataA
         else:
@@ -242,7 +243,7 @@ class Worker(multiprocessing.Process):
         self.__network_endpoint = network_endpoint
 
         self.carts = Worker.get_carts_layout(configuration.n_workers)
-        self.matrix = Matrix(configuration.submatrix_size, configuration.should_count_square)
+        self.matrix = Matrix(configuration.submatrix_size, configuration.should_count_square, worker_id)
 
     @property
     def _n_workers(self):
@@ -272,14 +273,14 @@ class Worker(multiprocessing.Process):
 
     # Getting current cart id
     def get_cart_row_id(self):
-        return self.get_my_cart_coordinates()[0][1]
+        return self.get_my_cart_coordinates()[0]
 
     def get_cart_column_id(self):
-        return self.get_my_cart_coordinates()[0][0]
+        return self.get_my_cart_coordinates()[1]
 
     # Returns list of matches, so assuming there is only one, we need to take first element
     def get_my_cart_coordinates(self):
-        return [(ind, self.carts[ind].index(self.__worker_id)) for ind in xrange(len(self.carts)) if self.__worker_id in self.carts[ind]]
+        return [(ind, self.carts[ind].index(self.__worker_id)) for ind in xrange(len(self.carts)) if self.__worker_id in self.carts[ind]][0]
 
     # Shifting of meshes between carts
     # Constitutive name - we shift columns, left
@@ -289,19 +290,25 @@ class Worker(multiprocessing.Process):
 
         if my_column_id == 0:
             # Last column
-            my_send_partner = last_column_id
-            my_receive_partner = my_column_id + 1
+            my_send_partner = self.carts[self.get_cart_row_id()][last_column_id]
+            my_receive_partner = self.carts[self.get_cart_row_id()][my_column_id + 1]
         elif my_column_id == last_column_id:
             # first column
-            my_send_partner = my_column_id - 1
-            my_receive_partner = 0
+            my_send_partner = self.carts[self.get_cart_row_id()][my_column_id - 1]
+            my_receive_partner = self.carts[self.get_cart_row_id()][0]
         else:
-            my_send_partner = my_column_id - 1
-            my_receive_partner = my_column_id + 1
+            my_send_partner = self.carts[self.get_cart_row_id()][my_column_id - 1]
+            my_receive_partner = self.carts[self.get_cart_row_id()][my_column_id + 1]
 
-        # Sending and receiving at once.. will it work ?!
-        self._send(my_send_partner, self.matrix.dataA)
-        received_data = self._receive(my_receive_partner)
+        received_data = None
+        if (my_column_id % 2) == 0:
+            source, received_data = self._receive(my_receive_partner)
+        else:
+            self._send(my_send_partner, self.matrix.dataA)
+        if (my_column_id % 2) == 1:
+            source, received_data = self._receive(my_receive_partner)
+        else:
+            self._send(my_send_partner, self.matrix.dataA)
 
         self.matrix.dataA = received_data
 
@@ -313,19 +320,25 @@ class Worker(multiprocessing.Process):
 
         if my_row_id == 0:
             # Last column
-            my_send_partner = last_row_id
-            my_receive_partner = my_row_id + 1
+            my_send_partner = self.carts[last_row_id][self.get_cart_column_id()]
+            my_receive_partner = self.carts[my_row_id + 1][self.get_cart_column_id()]
         elif my_row_id == last_row_id:
             # first column
-            my_send_partner = my_row_id - 1
-            my_receive_partner = 0
+            my_send_partner = self.carts[my_row_id - 1][self.get_cart_column_id()]
+            my_receive_partner = self.carts[0][self.get_cart_column_id()]
         else:
-            my_send_partner = my_row_id - 1
-            my_receive_partner = my_row_id + 1
+            my_send_partner = self.carts[my_row_id - 1][self.get_cart_column_id()]
+            my_receive_partner = self.carts[my_row_id + 1][self.get_cart_column_id()]
 
-        # Sending and receiving at once.. will it work ?!
-        self._send(my_send_partner, self.matrix.dataB)
-        received_data = self._receive(my_receive_partner)
+        received_data = None
+        if (my_row_id % 2) == 0:
+            source, received_data = self._receive(my_receive_partner)
+        else:
+            self._send(my_send_partner, self.matrix.dataB)
+        if (my_row_id % 2) == 1:
+            source, received_data = self._receive(my_receive_partner)
+        else:
+            self._send(my_send_partner, self.matrix.dataB)
 
         self.matrix.dataB = received_data
 
@@ -342,11 +355,11 @@ class Worker(multiprocessing.Process):
         return carts
 
     def run(self):
-        self._log('Started.')
-        print(repr(self.matrix.dataA))
+        #self._log('Started.')
+        # self._log(repr(self.matrix.dataA))
         self.left_circular_shift_row()
-        print(repr(self.matrix.dataA))
-        self._log('Terminated.')
+        self._log(repr(self.matrix.dataA))
+        # self._log('Terminated.')
 
 
 def main():
