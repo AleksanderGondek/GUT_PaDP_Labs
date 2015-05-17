@@ -357,8 +357,8 @@ class Worker(multiprocessing.Process):
     def run(self):
         #self._log('Started.')
         # self._log(repr(self.matrix.dataA))
-        self.left_circular_shift_row()
-        self._log(repr(self.matrix.dataA))
+        self.upward_circular_shift_column()
+        self._log(repr(self.matrix.dataB))
         # self._log('Terminated.')
 
 
