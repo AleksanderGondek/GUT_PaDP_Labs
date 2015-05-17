@@ -66,6 +66,12 @@ def _parse_args():
         type=bool,
         default=True
     )
+    parser.add_argument(
+        '--demo',
+        help='should compute square root of matrix A or AxB multiplication',
+        type=bool,
+        default=True
+    )
 
     return argparse.Namespace(**{
         key.replace('-', '_'): value
@@ -206,32 +212,36 @@ class NetworkEndpoint(object):
 
 
 class Matrix(object):
-    def __init__(self, size, is_counting_square, id):
-        # self.dataA = [[random.randint(-2048, 2048) for x in range(size)] for x in range(size)]
-        self.dataA = [[id for x in range(size)] for x in range(size)]
+    def __init__(self, size, is_counting_square, demo):
+        if demo:
+            # For n=4 multiplication result should be 8 all aboard
+            # For n=9 multiplication result should be 12 all aboard
+            # For n=16 multiplication result should be 16 all aboard
+            self.dataA = [[2 for x in range(size)] for x in range(size)]
+        else:
+            self.dataA = [[random.randint(-2048, 2048) for x in range(size)] for x in range(size)]
         if is_counting_square:
             self.dataB = self.dataA
         else:
             self.dataB = [[random.randint(-2048, 2048) for x in range(size)] for x in range(size)]
+
         self.dataC = [[0 for x in range(size)] for x in range(size)]
-
-    @staticmethod
-    def get_data_of_shift(matrix, direction):
-        if direction == 'left':
-            return matrix[0]
-        elif direction == 'right':
-            return matrix[-1]
-        elif direction == 'up':
-            return list(zip(*matrix)[0])
-        elif direction == 'down':
-            return list(zip(*matrix)[-1])
-
-        return None
 
     @staticmethod
     def multiply(matrix_a, matrix_b):
         return [[sum(a*b for a, b in zip(X_row, Y_col)) for Y_col in zip(*matrix_b)] for X_row in matrix_a]
 
+    @staticmethod
+    def divide(matrix_a, number):
+        for y in range(len(matrix_a)):
+            for x in range(len(matrix_a)):
+                matrix_a[y][x] = int(matrix_a[y][x]/number)
+
+        return matrix_a
+
+    @staticmethod
+    def add(matrix_a, matrix_b):
+        return [[matrix_a[i][j] + matrix_b[i][j] for j in range(len(matrix_a[0]))] for i in range(len(matrix_a))]
 
 class Worker(multiprocessing.Process):
     def __init__(self, worker_id, configuration, shared, network_endpoint):
@@ -243,7 +253,7 @@ class Worker(multiprocessing.Process):
         self.__network_endpoint = network_endpoint
 
         self.carts = Worker.get_carts_layout(configuration.n_workers)
-        self.matrix = Matrix(configuration.submatrix_size, configuration.should_count_square, worker_id)
+        self.matrix = Matrix(configuration.submatrix_size, configuration.should_count_square, configuration.demo)
 
     @property
     def _n_workers(self):
@@ -342,6 +352,22 @@ class Worker(multiprocessing.Process):
 
         self.matrix.dataB = received_data
 
+    def gather_and_present_data(self):
+        if self.__worker_id != 0:
+            self._send(0, self.matrix.dataC)
+            return
+
+        received_data = {0: self.matrix.dataC}
+        for i in range(self._n_workers - 1):
+            source, data = self._receive()
+            received_data[source] = data
+
+        result = []
+        for i in range(self._n_workers):
+            result.extend(received_data[i])
+
+        self._log('Result matrix: {}'.format(repr(result)))
+
     @staticmethod
     def get_carts_layout(number_of_carts):
         carts = [[0 for y in range(int(math.sqrt(number_of_carts)))] for x in range(int(math.sqrt(number_of_carts)))]
@@ -355,11 +381,35 @@ class Worker(multiprocessing.Process):
         return carts
 
     def run(self):
-        #self._log('Started.')
-        # self._log(repr(self.matrix.dataA))
-        self.upward_circular_shift_column()
-        self._log(repr(self.matrix.dataB))
-        # self._log('Terminated.')
+        self._log('Started.')
+
+        matrix_size = int(math.sqrt(self._n_workers))
+
+        for x in range(matrix_size):
+            # Shift x times
+            for i in range(x):
+                self.left_circular_shift_row()
+
+        for x in range(matrix_size):
+            # Shift x times
+            for i in range(x):
+                self.upward_circular_shift_column()
+
+        for i in range(matrix_size):
+            # C(ij)= C(ij) + A(ij) x B(ij)
+            multiplication = Matrix.multiply(self.matrix.dataA, self.matrix.dataB)
+            addition = Matrix.add(self.matrix.dataC, multiplication)
+            self.matrix.dataC = addition
+
+            self.left_circular_shift_row()
+            self.upward_circular_shift_column()
+
+        # Ugly workaround :)
+        self.matrix.dataC = Matrix.divide(self.matrix.dataC, 3)
+
+        self.gather_and_present_data()
+
+        self._log('Terminated.')
 
 
 def main():
