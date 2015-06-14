@@ -405,9 +405,6 @@ class Worker(multiprocessing.Process):
             self.left_circular_shift_row()
             self.upward_circular_shift_column()
 
-        # Ugly workaround :)
-        self.matrix.dataC = Matrix.divide(self.matrix.dataC, 3)
-
         self.gather_and_present_data()
 
         self._log('Terminated.')
